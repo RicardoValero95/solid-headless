@@ -1,27 +1,25 @@
-import {
-  createContext,
-  JSX,
-  useContext,
-} from 'solid-js';
+import { JSX } from 'solid-js';
 import useControlledSignal from '../utils/use-controlled-signal';
+import { RenderProp } from './utils';
+import { createRootChild } from './RootChild';
 
-export interface HeadlessToggleOptions {
+export type Options = {
   checked?: boolean;
   defaultChecked?: boolean;
-  disabled?: boolean;
   onChange?: (state?: boolean) => void;
+  disabled?: boolean;
   CONTROLLED?: boolean;
 }
 
-export interface HeadlessToggleProperties {
+export type Properties = {
   checked(): boolean | undefined;
   setState(newState?: boolean): void;
   disabled(): boolean;
 }
 
-export function useHeadlessToggle(
-  options: HeadlessToggleOptions = {},
-): HeadlessToggleProperties {
+export function useRoot(
+  options: Options = {},
+): Properties {
   const isControlled = 'CONTROLLED' in options ? options.CONTROLLED : 'checked' in options;
 
   const [signal, setSignal] = useControlledSignal(
@@ -31,79 +29,34 @@ export function useHeadlessToggle(
   );
 
   return {
-    checked() {
-      return signal();
-    },
+    checked: () => signal(),
     setState(value) {
       if (!options.disabled) {
         setSignal(value);
         options.onChange?.(value);
       }
     },
-    disabled() {
-      return !!options.disabled;
-    },
+    disabled: () => !!options.disabled,
   };
 }
 
-const HeadlessToggleContext = createContext<HeadlessToggleProperties>();
+export const { Root, useChild, Child } = createRootChild(useRoot);
 
-export type HeadlessToggleRootRenderProp = (
-  (properties: HeadlessToggleProperties) => JSX.Element
-);
+// TODO: How to extract these types from createRootChild?
+export type RootRenderProp = RenderProp<Properties>
+export type RootProps = Options & { children?: RootRenderProp | JSX.Element }
+export type ChildRenderProp = RenderProp<Properties>
+export type ChildProps = { children?: ChildRenderProp | JSX.Element }
 
-function isHeadlessToggleRootRenderProp(
-  children: HeadlessToggleRootRenderProp | JSX.Element,
-): children is HeadlessToggleRootRenderProp {
-  return typeof children === 'function' && children.length > 0;
-}
-
-export interface HeadlessToggleRootProps extends HeadlessToggleOptions {
-  children?: HeadlessToggleRootRenderProp | JSX.Element;
-}
-
-export function HeadlessToggleRoot(props: HeadlessToggleRootProps): JSX.Element {
-  const properties = useHeadlessToggle(props);
-  return (
-    <HeadlessToggleContext.Provider value={properties}>
-      {(() => {
-        const body = props.children;
-        if (isHeadlessToggleRootRenderProp(body)) {
-          return body(properties);
-        }
-        return body;
-      })()}
-    </HeadlessToggleContext.Provider>
-  );
-}
-
-export function useHeadlessToggleChild(): HeadlessToggleProperties {
-  const properties = useContext(HeadlessToggleContext);
-  if (properties) {
-    return properties;
-  }
-  throw new Error('`useToggleChild` must be used within ToggleRoot.');
-}
-
-export type HeadlessToggleChildRenderProp = (
-  (properties: HeadlessToggleProperties) => JSX.Element
-);
-
-function isHeadlessToggleChildRenderProp(
-  children: HeadlessToggleChildRenderProp | JSX.Element,
-): children is HeadlessToggleChildRenderProp {
-  return typeof children === 'function' && children.length > 0;
-}
-
-export interface HeadlessToggleChildProps {
-  children?: HeadlessToggleChildRenderProp | JSX.Element;
-}
-
-export function HeadlessToggleChild(props: HeadlessToggleChildProps): JSX.Element {
-  const properties = useHeadlessToggleChild();
-  const body = props.children;
-  if (isHeadlessToggleChildRenderProp(body)) {
-    return body(properties);
-  }
-  return body;
-}
+export {
+  Child as HeadlessToggleChild,
+  ChildProps as HeadlessToggleChildProps,
+  ChildRenderProp as HeadlessToggleChildRenderProp,
+  Options as HeadlessToggleOptions,
+  Properties as HeadlessToggleProperties,
+  Root as HeadlessToggleRoot,
+  RootProps as HeadlessToggleRootProps,
+  RootRenderProp as HeadlessToggleRootRenderProp,
+  useRoot as useHeadlessToggle,
+  useChild as useHeadlessToggleChild,
+};

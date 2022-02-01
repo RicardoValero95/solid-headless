@@ -1,27 +1,25 @@
-import {
-  createContext,
-  JSX,
-  useContext,
-} from 'solid-js';
+import { JSX } from 'solid-js/jsx-runtime';
 import useControlledSignal from '../utils/use-controlled-signal';
+import { RenderProp } from './utils';
+import { createRootChild } from './RootChild';
 
-export interface HeadlessDisclosureOptions {
+type Options = {
   isOpen?: boolean;
   defaultOpen?: boolean;
-  disabled?: boolean;
   onChange?: (state: boolean) => void;
+  disabled?: boolean;
   CONTROLLED?: boolean;
 }
 
-export interface HeadlessDisclosureProperties {
+type Properties = {
   isOpen(): boolean;
   setState(newState: boolean): void;
   disabled(): boolean;
 }
 
-export function useHeadlessDisclosure(
-  options: HeadlessDisclosureOptions = {},
-): HeadlessDisclosureProperties {
+function useRoot(
+  options: Options = {},
+): Properties {
   const isControlled = 'CONTROLLED' in options ? options.CONTROLLED : 'isOpen' in options;
 
   const [signal, setSignal] = useControlledSignal(
@@ -31,78 +29,31 @@ export function useHeadlessDisclosure(
   );
 
   return {
-    isOpen() {
-      return signal();
-    },
-    setState(value) {
-      if (!options.disabled) {
-        setSignal(value);
-      }
-    },
-    disabled() {
-      return !!options.disabled;
-    },
+    isOpen: () => signal(),
+    setState: (value) => ((!options.disabled)
+      ? setSignal(value)
+      : {}),
+    disabled: () => !!options.disabled,
   };
 }
 
-const HeadlessDisclosureContext = createContext<HeadlessDisclosureProperties>();
+const { Root, useChild, Child } = createRootChild(useRoot);
 
-export type HeadlessDisclosureRootRenderProp = (
-  (properties: HeadlessDisclosureProperties) => JSX.Element
-);
+// TODO: How to extract these types from createRootChild?
+type RootRenderProp = RenderProp<Properties>
+type RootProps = { children?: RootRenderProp | JSX.Element } & Options
+type ChildRenderProp = RenderProp<Properties>
+type ChildProps = { children?: ChildRenderProp | JSX.Element }
 
-function isHeadlessDisclosureRootRenderProp(
-  children: HeadlessDisclosureRootRenderProp | JSX.Element,
-): children is HeadlessDisclosureRootRenderProp {
-  return typeof children === 'function' && children.length > 0;
-}
-
-export interface HeadlessDisclosureRootProps extends HeadlessDisclosureOptions {
-  children?: HeadlessDisclosureRootRenderProp | JSX.Element;
-}
-
-export function HeadlessDisclosureRoot(props: HeadlessDisclosureRootProps): JSX.Element {
-  const properties = useHeadlessDisclosure(props);
-  return (
-    <HeadlessDisclosureContext.Provider value={properties}>
-      {(() => {
-        const body = props.children;
-        if (isHeadlessDisclosureRootRenderProp(body)) {
-          return body(properties);
-        }
-        return body;
-      })()}
-    </HeadlessDisclosureContext.Provider>
-  );
-}
-
-export function useHeadlessDisclosureChild(): HeadlessDisclosureProperties {
-  const properties = useContext(HeadlessDisclosureContext);
-  if (properties) {
-    return properties;
-  }
-  throw new Error('`useDisclosureChild` must be used within DisclosureRoot.');
-}
-
-export type HeadlessDisclosureChildRenderProp = (
-  (properties: HeadlessDisclosureProperties) => JSX.Element
-);
-
-function isHeadlessDisclosureChildRenderProp(
-  children: HeadlessDisclosureChildRenderProp | JSX.Element,
-): children is HeadlessDisclosureChildRenderProp {
-  return typeof children === 'function' && children.length > 0;
-}
-
-export interface HeadlessDisclosureChildProps {
-  children?: HeadlessDisclosureChildRenderProp | JSX.Element;
-}
-
-export function HeadlessDisclosureChild(props: HeadlessDisclosureChildProps): JSX.Element {
-  const properties = useHeadlessDisclosureChild();
-  const body = props.children;
-  if (isHeadlessDisclosureChildRenderProp(body)) {
-    return body(properties);
-  }
-  return body;
-}
+export {
+  Child as HeadlessDisclosureChild,
+  ChildProps as HeadlessDisclosureChildProps,
+  ChildRenderProp as HeadlessDisclosureChildRenderProp,
+  Options as HeadlessDisclosureOptions,
+  Properties as HeadlessDisclosureProperties,
+  Root as HeadlessDisclosureRoot,
+  RootProps as HeadlessDisclosureRootProps,
+  RootRenderProp as HeadlessDisclosureRootRenderProp,
+  useRoot as useHeadlessDisclosure,
+  useChild as useHeadlessDisclosureChild,
+};

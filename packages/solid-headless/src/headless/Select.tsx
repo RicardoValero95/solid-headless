@@ -7,32 +7,33 @@ import {
 } from 'solid-js';
 import { Ref } from '../utils/types';
 import useControlledSignal from '../utils/use-controlled-signal';
+import { renderBody, RenderProp } from './utils';
 
-export interface HeadlessSelectMultipleOptions<T> {
+type MultipleOptions<T> = {
   multiple: true;
   toggleable?: boolean;
-  defaultValue?: T[];
   value?: T[];
-  onChange?: (value: T[]) => void;
+  defaultValue?: T[];
+  onChange?: (value?: T[]) => void;
   disabled?: boolean;
   CONTROLLED?: boolean;
 }
 
-export interface HeadlessSelectSingleOptions<T> {
+type SingleOptions<T> = {
   multiple?: false;
   toggleable?: boolean;
-  defaultValue?: T;
   value?: T;
+  defaultValue?: T;
   onChange?: (value?: T) => void;
   disabled?: boolean;
   CONTROLLED?: boolean;
 }
 
-export type HeadlessSelectOptions<T> =
-  | HeadlessSelectSingleOptions<T>
-  | HeadlessSelectMultipleOptions<T>;
+type Options<T> =
+  | SingleOptions<T>
+  | MultipleOptions<T>
 
-export interface HeadlessSelectProperties<T> {
+type Properties<T> = {
   isSelected(value: T): boolean;
   select(value: T): void;
   hasSelected(): boolean;
@@ -43,9 +44,9 @@ export interface HeadlessSelectProperties<T> {
   disabled(): boolean;
 }
 
-export function useHeadlessSelect<T>(
-  options: HeadlessSelectOptions<T>,
-): HeadlessSelectProperties<T> {
+function useRoot<T>(
+  options: Options<T>,
+): Properties<T> {
   const [active, setActive] = createSignal<Ref<T>>();
 
   if (options.multiple) {
@@ -58,44 +59,23 @@ export function useHeadlessSelect<T>(
     );
 
     return {
-      isSelected(value) {
-        return new Set(selectedValues()).has(value);
-      },
-      select(value) {
+      isSelected: (value) => new Set(selectedValues()).has(value),
+      select: (value) => {
         const set = new Set(untrack(selectedValues));
-        if (options.toggleable && set.has(value)) {
-          set.delete(value);
-        } else {
-          set.add(value);
-        }
-        setSelectedValues([
-          ...set,
-        ]);
+        (options.toggleable && set.has(value)) ? set.delete(value) : set.add(value);
+        setSelectedValues([...set]);
       },
-      hasSelected() {
-        return selectedValues().length > 0;
-      },
-      disabled() {
-        return !!options.disabled;
-      },
-      hasActive() {
-        return !!active();
-      },
-      isActive(value) {
+      hasSelected: () => selectedValues().length > 0,
+      disabled: () => !!options.disabled,
+      hasActive: () => !!active(),
+      isActive: (value) => {
         const ref = active();
-        if (ref) {
-          return Object.is(value, ref.value);
-        }
-        return false;
+        return (ref)
+          ? Object.is(value, ref.value)
+          : false;
       },
-      focus(value) {
-        return setActive({
-          value,
-        });
-      },
-      blur() {
-        return setActive(undefined);
-      },
+      focus: (value) => setActive({ value }),
+      blur: () => setActive(undefined),
     };
   }
 
@@ -108,203 +88,73 @@ export function useHeadlessSelect<T>(
   );
 
   return {
-    isSelected(value) {
-      return Object.is(value, selectedValue());
-    },
-    select(value) {
-      if (options.toggleable && Object.is(untrack(selectedValue), value)) {
-        setSelectedValue(undefined);
-      } else {
-        setSelectedValue(value);
-      }
-    },
-    hasSelected() {
-      return selectedValue() != null;
-    },
-    disabled() {
-      return !!options.disabled;
-    },
-    hasActive() {
-      return !!active();
-    },
-    isActive(value) {
+    isSelected: (value) => Object.is(value, selectedValue()),
+    select: (value) => ((options.toggleable && Object.is(untrack(selectedValue), value))
+      ? setSelectedValue(undefined)
+      : setSelectedValue(value)),
+    hasSelected: () => selectedValue() != null,
+    disabled: () => !!options.disabled,
+    hasActive: () => !!active(),
+    isActive: (value) => {
       const ref = active();
-      if (ref) {
-        return Object.is(value, ref.value);
-      }
-      return false;
+      return (ref)
+        ? Object.is(value, ref.value)
+        : false;
     },
-    focus(value) {
-      return setActive({
-        value,
-      });
-    },
-    blur() {
-      return setActive(undefined);
-    },
+    focus: (value) => setActive({ value }),
+    blur: () => setActive(undefined),
   };
 }
 
-const HeadlessSelectContext = createContext<HeadlessSelectProperties<any>>();
+const RootContext = createContext<Properties<unknown>>();
 
-export type HeadlessSelectRootRenderProp<T> = (
-  (properties: HeadlessSelectProperties<T>) => JSX.Element
-);
+type RootRenderProp<T> = RenderProp<Properties<T>>;
+export type RootProps<T> = { children?: RootRenderProp<T> | JSX.Element } & Options<T>
 
-function isHeadlessSelectRootRenderProp<T>(
-  children: HeadlessSelectRootRenderProp<T> | JSX.Element,
-): children is HeadlessSelectRootRenderProp<T> {
-  return typeof children === 'function' && children.length > 0;
-}
-
-export type HeadlessSelectRootProps<T> = {
-  children?: HeadlessSelectRootRenderProp<T> | JSX.Element;
-} & HeadlessSelectOptions<T>;
-
-export function HeadlessSelectRoot<T>(props: HeadlessSelectRootProps<T>): JSX.Element {
-  const properties = useHeadlessSelect(props);
+function Root<T>(props: RootProps<T>): JSX.Element {
+  const properties = useRoot(props);
   return (
-    <HeadlessSelectContext.Provider value={properties}>
-      {(() => {
-        const body = props.children;
-        if (isHeadlessSelectRootRenderProp(body)) {
-          return body(properties);
-        }
-        return body;
-      })()}
-    </HeadlessSelectContext.Provider>
+    <RootContext.Provider value={properties}>
+      {(() => renderBody(props.children, properties))()}
+    </RootContext.Provider>
   );
 }
 
-export function useHeadlessSelectChild<T>(): HeadlessSelectProperties<T> {
-  const properties = useContext(HeadlessSelectContext);
-  if (properties) {
-    return properties;
-  }
-  throw new Error('`useHeadlessSelectChild` must be used within HeadlessSelectRoot.');
+export function useChild<T>(): Properties<T> {
+  const properties = useContext(RootContext);
+  if (properties) return properties;
+  throw new Error('`useChild` must be used within Root.');
 }
 
-export type HeadlessSelectChildRenderProp<T> = (
-  (properties: HeadlessSelectProperties<T>) => JSX.Element
-);
+type ChildRenderProp<T> = RenderProp<Properties<T>>
+type ChildProps<T> = { children?: ChildRenderProp<T> | JSX.Element }
 
-function isHeadlessSelectChildRenderProp<T>(
-  children: HeadlessSelectChildRenderProp<T> | JSX.Element,
-): children is HeadlessSelectChildRenderProp<T> {
-  return typeof children === 'function' && children.length > 0;
+function Child<T>(props: ChildProps<T>): JSX.Element {
+  const properties = useChild<T>();
+  return renderBody(props.children, properties);
 }
 
-export interface HeadlessSelectChildProps<T> {
-  children?: HeadlessSelectChildRenderProp<T> | JSX.Element;
-}
+export {
+  Child as HeadlessSelectChild,
+  ChildProps as HeadlessSelectChildProps,
+  ChildRenderProp as HeadlessSelectChildRenderProp,
+  Options as HeadlessSelectOptions,
+  Properties as HeadlessSelectProperties,
+  Root as HeadlessSelectRoot,
+  RootProps as HeadlessSelectRootProps,
+  RootRenderProp as HeadlessSelectRootRenderProp,
+  useRoot as useHeadlessSelect,
+  useChild as useHeadlessSelectChild,
+};
 
-export function HeadlessSelectChild<T>(props: HeadlessSelectChildProps<T>): JSX.Element {
-  const properties = useHeadlessSelectChild<T>();
-  const body = props.children;
-  if (isHeadlessSelectChildRenderProp(body)) {
-    return body(properties);
-  }
-  return body;
-}
-
-export interface HeadlessSelectOptionProperties {
-  isSelected(): boolean;
-  select(): void;
-  isActive(): boolean;
-  focus(): void;
-  blur(): void;
-  disabled(): boolean;
-}
-
-export function useHeadlessSelectOption<T>(
-  value: () => T,
-  disabled?: () => boolean,
-): HeadlessSelectOptionProperties {
-  const properties = useHeadlessSelectChild<T>();
-  const isDisabled = () => disabled?.() || properties.disabled();
-  return {
-    isSelected() {
-      return properties.isSelected(value());
-    },
-    isActive() {
-      return properties.isActive(value());
-    },
-    select() {
-      if (!isDisabled()) {
-        properties.select(value());
-      }
-    },
-    focus() {
-      if (!isDisabled()) {
-        properties.focus(value());
-      }
-    },
-    blur() {
-      if (!isDisabled() && this.isActive()) {
-        properties.blur();
-      }
-    },
-    disabled: isDisabled,
-  };
-}
-
-export type HeadlessSelectOptionRenderProp = (
-  (properties: HeadlessSelectOptionProperties) => JSX.Element
-);
-
-function isHeadlessSelectOptionRenderProp(
-  children: HeadlessSelectOptionRenderProp | JSX.Element,
-): children is HeadlessSelectOptionRenderProp {
-  return typeof children === 'function' && children.length > 0;
-}
-
-const HeadlessSelectOptionContext = createContext<HeadlessSelectOptionProperties>();
-
-export interface HeadlessSelectOptionProps<T> {
-  value: T;
-  disabled?: boolean,
-  children?: HeadlessSelectOptionRenderProp | JSX.Element;
-}
-
-export function HeadlessSelectOption<T>(
-  props: HeadlessSelectOptionProps<T>,
-): JSX.Element {
-  const properties = useHeadlessSelectOption(
-    () => props.value,
-    () => !!props.disabled,
-  );
-  return (
-    <HeadlessSelectOptionContext.Provider value={properties}>
-      {(() => {
-        const body = props.children;
-        if (isHeadlessSelectOptionRenderProp(body)) {
-          return body(properties);
-        }
-        return body;
-      })()}
-    </HeadlessSelectOptionContext.Provider>
-  );
-}
-
-export function useHeadlessSelectOptionChild(): HeadlessSelectOptionProperties {
-  const properties = useContext(HeadlessSelectOptionContext);
-  if (properties) {
-    return properties;
-  }
-  throw new Error('`useHeadlessSelectChild` must be used within HeadlessSelectOption');
-}
-
-export interface HeadlessSelectOptionChildProps {
-  children?: HeadlessSelectOptionRenderProp | JSX.Element;
-}
-
-export function HeadlessSelectOptionChild(
-  props: HeadlessSelectOptionChildProps,
-): JSX.Element {
-  const properties = useHeadlessSelectOptionChild();
-  const body = props.children;
-  if (isHeadlessSelectOptionRenderProp(body)) {
-    return body(properties);
-  }
-  return body;
-}
+// eslint-disable-next-line import/no-cycle
+export {
+  HeadlessSelectOption,
+  HeadlessSelectOptionChild,
+  HeadlessSelectOptionChildProps,
+  HeadlessSelectOptionProperties,
+  HeadlessSelectOptionProps,
+  HeadlessSelectOptionRenderProp,
+  useHeadlessSelectOption,
+  useHeadlessSelectOptionChild,
+} from './Option';
